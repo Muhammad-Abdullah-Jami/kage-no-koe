@@ -1,0 +1,12 @@
+flask==3.0.0
+flask-socketio==5.3.5
+flask-cors==4.0.0
+python-socketio==5.10.0
+pypdf2==3.0.1
+python-docx==1.1.0
+openpyxl==3.1.2
+pillow==10.1.0
+pytesseract==0.3.10
+duckduckgo-search==4.1.1
+requests==2.31.0
+python-dotenv==1.0.0

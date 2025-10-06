@@ -1,0 +1,8 @@
+{
+  "model_name": "llama3.2:3b",
+  "hardware_profile": "laptop",
+  "database_path": "data/app.db",
+  "upload_folder": "data/uploads",
+  "max_file_size_mb": 50,
+  "port": 5000
+}
