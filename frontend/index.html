@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kage no Koe - Voice of the Shadow</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="theme-dark">
+    <!-- Main Container -->
+    <div class="app-container">
+        
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <!-- Sidebar Header -->
+            <div class="sidebar-header">
+                <h1 class="app-title">
+                    <span class="app-icon">👤</span>
+                    <div class="title-text">
+                        <span class="main-title">Kage no Koe</span>
+                        <span class="subtitle">LocalMind</span>
+                    </div>
+                </h1>
+                <button class="new-chat-btn" id="newChatBtn" title="New Chat">
+                    <span>+</span> New Chat
+                </button>
+            </div>
+
+            <!-- Chat List -->
+            <div class="chat-list" id="chatList">
+                <div class="chat-list-empty">
+                    <p>No chats yet</p>
+                    <p class="text-muted">Start a new conversation</p>
+                </div>
+            </div>
+
+            <!-- Sidebar Footer -->
+            <div class="sidebar-footer">
+                <button class="sidebar-btn" id="settingsBtn" title="Settings">
+                    <span class="btn-icon">⚙️</span>
+                    <span class="btn-text">Settings</span>
+                </button>
+                <button class="sidebar-btn" id="modelsBtn" title="Models">
+                    <span class="btn-icon">🤖</span>
+                    <span class="btn-text">Models</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            
+            <!-- Header -->
+            <header class="chat-header">
+                <div class="header-left">
+                    <button class="icon-btn" id="toggleSidebarBtn" title="Toggle Sidebar">
+                        <span>☰</span>
+                    </button>
+                    <div class="chat-title-area">
+                        <h2 class="chat-title" id="currentChatTitle">New Chat</h2>
+                        <span class="chat-model" id="currentChatModel">llama3.2:1b</span>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <button class="icon-btn" id="themeToggleBtn" title="Toggle Theme">
+                        <span class="theme-icon">🌙</span>
+                    </button>
+                    <div class="status-indicator" id="statusIndicator">
+                        <span class="status-dot"></span>
+                        <span class="status-text">Connected</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Chat Messages Area -->
+            <div class="chat-container" id="chatContainer">
+                <!-- Welcome Screen (shown when no chat is active) -->
+                <div class="welcome-screen" id="welcomeScreen">
+                    <div class="welcome-content">
+                        <div class="welcome-icon">👤</div>
+                        <h1 class="welcome-title">Kage no Koe</h1>
+                        <p class="welcome-subtitle-jp">影の声 - Voice of the Shadow</p>
+                        <p class="welcome-subtitle">LocalMind AI Assistant powered by Ollama</p>
+                        
+                        <div class="welcome-features">
+                            <div class="feature-card">
+                                <span class="feature-icon">💬</span>
+                                <h3>Natural Conversations</h3>
+                                <p>Chat naturally with AI running locally on your machine</p>
+                            </div>
+                            <div class="feature-card">
+                                <span class="feature-icon">🔒</span>
+                                <h3>Privacy First</h3>
+                                <p>All data stays on your device - no cloud, no tracking</p>
+                            </div>
+                            <div class="feature-card">
+                                <span class="feature-icon">⚡</span>
+                                <h3>Fast & Efficient</h3>
+                                <p>Optimized for laptop hardware with 1B parameter model</p>
+                            </div>
+                        </div>
+
+                        <div class="welcome-actions">
+                            <button class="primary-btn" id="startChatBtn">
+                                <span>Start Chatting</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Messages Container (hidden until chat starts) -->
+                <div class="messages-container" id="messagesContainer" style="display: none;">
+                    <!-- Messages will be added here dynamically -->
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="input-area">
+                <div class="input-container">
+                    <!-- File Upload Button -->
+                    <button class="input-btn" id="attachFileBtn" title="Attach File">
+                        <span>📎</span>
+                    </button>
+                    <input type="file" id="fileInput" style="display: none;" multiple>
+
+                    <!-- Text Input -->
+                    <textarea 
+                        class="message-input" 
+                        id="messageInput" 
+                        placeholder="Type your message here..."
+                        rows="1"
+                    ></textarea>
+
+                    <!-- Send Button -->
+                    <button class="send-btn" id="sendBtn" title="Send Message" disabled>
+                        <span class="send-icon">➤</span>
+                    </button>
+                </div>
+
+                <!-- Input Footer Info -->
+                <div class="input-footer">
+                    <span class="input-hint">Press Enter to send, Shift+Enter for new line</span>
+                    <span class="token-counter" id="tokenCounter">0 tokens</span>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Settings Modal (will be styled later) -->
+    <div class="modal" id="settingsModal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button class="modal-close" id="closeSettingsBtn">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <label class="setting-label">Theme</label>
+                    <div class="theme-selector">
+                        <button class="theme-option" data-theme="dark">
+                            <span>🌙</span> Dark
+                        </button>
+                        <button class="theme-option" data-theme="light">
+                            <span>☀️</span> Light
+                        </button>
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label class="setting-label">Global Context</label>
+                    <textarea class="setting-textarea" id="globalContext" placeholder="Set a system message for all chats..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="secondary-btn" id="cancelSettingsBtn">Cancel</button>
+                <button class="primary-btn" id="saveSettingsBtn">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Models Modal -->
+    <div class="modal" id="modelsModal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Available Models</h2>
+                <button class="modal-close" id="closeModelsBtn">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="models-list" id="modelsList">
+                    <p class="text-muted">Loading models...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="state.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
