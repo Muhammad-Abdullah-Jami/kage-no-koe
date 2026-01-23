@@ -1,0 +1,3 @@
+Ollama is a tool for running large language models locally.
+It supports models like Llama, Mistral, and many others.
+Ollama provides a simple API and command-line interface.

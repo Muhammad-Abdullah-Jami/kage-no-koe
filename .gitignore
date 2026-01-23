@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+.venv
+env/
+
+# Logs
+*.log
+backend.log
+frontend.log
+
+# Database
+kage.db
+*.sqlite3
+
+# Node/Frontend (redundant if frontend has .gitignore but good for root)
+node_modules/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Project specific
+ollama_models/

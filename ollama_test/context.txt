@@ -1,0 +1,6 @@
+Project Context:
+- Building an agentic offline chatbot
+- Using FastAPI backend with React frontend
+- PostgreSQL for storing conversations
+- Model switching capability between different LLMs
+- Using Ollama for running local models
