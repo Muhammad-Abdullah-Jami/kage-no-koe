@@ -24,6 +24,8 @@ class Chat(ChatBase, table=True):
     
     project: Optional[Project] = Relationship(back_populates="chats")
     messages: List["Message"] = Relationship(back_populates="chat")
+    context_items: List["ContextItem"] = Relationship(back_populates="chat")
+
 
 class MessageBase(SQLModel):
     role: str # "user", "assistant", "system"
@@ -39,3 +41,14 @@ class Message(MessageBase, table=True):
 class GlobalSettings(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     global_context_text: Optional[str] = None # Global system prompt
+
+class ContextItem(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    chat_id: Optional[int] = Field(default=None, foreign_key="chat.id")
+    name: str
+    type: str = "text" # "text", "file", "system"
+    content: str # content or file path
+    is_active: bool = True
+    
+    chat: Optional["Chat"] = Relationship(back_populates="context_items")
+

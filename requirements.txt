@@ -4,3 +4,4 @@ httpx
 requests
 ollama
 sqlmodel
+python-multipart
