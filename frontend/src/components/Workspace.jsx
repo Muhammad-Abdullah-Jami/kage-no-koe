@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Paperclip, Mic } from 'lucide-react';
+import { Send, Paperclip, Mic, ChevronUp, Cpu, RefreshCw, ArrowUp } from 'lucide-react';
 
-const Workspace = ({ currentChat, onSendMessage }) => {
+const Workspace = ({ currentChat, onSendMessage, availableModels, selectedModel, onModelChange, onRefreshModels, onFileUpload }) => {
     const [input, setInput] = useState('');
+    const [showModelMenu, setShowModelMenu] = useState(false);
     const messagesEndRef = useRef(null);
+    const fileInputRef = useRef(null);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -25,6 +27,18 @@ const Workspace = ({ currentChat, onSendMessage }) => {
             handleSend();
         }
     };
+
+    const handleFileClick = () => {
+        fileInputRef.current?.click();
+    }
+
+    const handleFileChange = (e) => {
+        if (e.target.files && e.target.files[0]) {
+            onFileUpload(e.target.files[0]);
+        }
+        // Reset so same file can be selected again if needed
+        e.target.value = null;
+    }
 
     const formatTime = (isoString) => {
         if (!isoString) return "";
@@ -83,9 +97,50 @@ const Workspace = ({ currentChat, onSendMessage }) => {
                         rows={1}
                     />
                     <div className="input-actions">
-                        <button className="action-btn small"><Paperclip size={16} /></button>
-                        <button className="action-btn small"><Mic size={16} /></button>
-                        <button className="send-btn" onClick={handleSend}><Send size={18} /></button>
+                        <div className="model-selector-container">
+                            <button className="model-toggle-btn" onClick={() => setShowModelMenu(!showModelMenu)}>
+                                <Cpu size={14} /> <span style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedModel}</span>
+                            </button>
+                            {showModelMenu && (
+                                <div className="model-menu">
+                                    <div className="model-menu-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span>Select Model</span>
+                                        <button onClick={onRefreshModels} title="Refresh Models" style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}>
+                                            <RefreshCw size={10} />
+                                        </button>
+                                    </div>
+                                    <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                                        {availableModels.length === 0 ? (
+                                            <div className="model-menu-item">No models found</div>
+                                        ) : (
+                                            availableModels.map((m, i) => (
+                                                <div
+                                                    key={i}
+                                                    className={`model-menu-item ${selectedModel === m.name ? 'active' : ''}`}
+                                                    onClick={() => { onModelChange(m.name); setShowModelMenu(false); }}
+                                                >
+                                                    {m.name}
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            style={{ display: 'none' }}
+                            onChange={handleFileChange}
+                        />
+                        <button className="action-btn" onClick={handleFileClick} title="Attach file to Context">
+                            <Paperclip size={18} />
+                        </button>
+
+                        <button className="send-btn" onClick={handleSend} title="Send message">
+                            <ArrowUp size={20} strokeWidth={2.5} />
+                        </button>
                     </div>
                 </div>
             </div>

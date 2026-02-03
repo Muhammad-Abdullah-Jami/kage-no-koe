@@ -5,3 +5,6 @@ requests
 ollama
 sqlmodel
 python-multipart
+llama-index
+llama-index-llms-ollama
+llama-index-embeddings-ollama

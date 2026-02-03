@@ -65,24 +65,33 @@ else
 fi
 
 # -----------------------------------------
-# 2) Ensure at least one model is available
-#    - If none, pull llama3.2:1b by default
+# 2) Ensure required models are available
 # -----------------------------------------
-echo -e "${YELLOW}Checking for installed Ollama models...${NC}"
-TAGS_JSON="$(curl -s http://localhost:11434/api/tags || true)"
+echo -e "${YELLOW}Checking for required Ollama models...${NC}"
 
-# If the tags endpoint returns an empty list, install default model
-if echo "$TAGS_JSON" | grep -q '"models"[[:space:]]*:[[:space:]]*\[\]'; then
-  echo -e "${YELLOW}No models found. Pulling default model: llama3.2:1b ...${NC}"
+# Check for llama3.2:1b (chat model)
+if ! ollama list | grep -q "llama3.2:1b"; then
+  echo -e "${YELLOW}Chat model not found. Pulling llama3.2:1b...${NC}"
   if ollama pull llama3.2:1b; then
-    echo -e "${GREEN}✅ Default model 'llama3.2:1b' installed${NC}"
+    echo -e "${GREEN}✅ Chat model 'llama3.2:1b' installed${NC}"
   else
     echo -e "${RED}❌ Failed to pull 'llama3.2:1b'${NC}"
-    echo -e "${YELLOW}You can manually run: 'ollama pull llama3.2:1b' and re-run this script.${NC}"
-    # Not exiting—continue so the app can still start if desired
+    echo -e "${YELLOW}You can manually run: 'ollama pull llama3.2:1b'${NC}"
   fi
 else
-  echo -e "${GREEN}✅ At least one model already present. Skipping default install.${NC}"
+  echo -e "${GREEN}✅ Chat model 'llama3.2:1b' already installed${NC}"
+fi
+
+# Check for nomic-embed-text (embedding model for RAG)
+if ! ollama list | grep -q "nomic-embed-text"; then
+  echo -e "${YELLOW}Embedding model not found. Pulling nomic-embed-text for RAG features...${NC}"
+  if ollama pull nomic-embed-text; then
+    echo -e "${GREEN}✅ Embedding model 'nomic-embed-text' installed${NC}"
+  else
+    echo -e "${YELLOW}⚠️  Failed to pull 'nomic-embed-text' - RAG features will be disabled${NC}"
+  fi
+else
+  echo -e "${GREEN}✅ Embedding model 'nomic-embed-text' already installed${NC}"
 fi
 
 # -----------------------------

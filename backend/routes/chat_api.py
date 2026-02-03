@@ -10,11 +10,27 @@ import logging
 # Re-use the existing MODEL config or move to settings later
 MODEL = "llama3.2:1b"
 
+# LlamaIndex imports - gracefully degrade if not installed
+try:
+    from llama_index.core import Document, VectorStoreIndex, Settings as LlamaSettings
+    from llama_index.llms.ollama import Ollama
+    from llama_index.embeddings.ollama import OllamaEmbedding
+
+    # Configure LlamaIndex with Ollama
+    LlamaSettings.llm = Ollama(model=MODEL, request_timeout=120.0)
+    LlamaSettings.embed_model = OllamaEmbedding(model_name="nomic-embed-text")
+    LLAMAINDEX_AVAILABLE = True
+except ImportError:
+    LLAMAINDEX_AVAILABLE = False
+    logging.warning("LlamaIndex not installed - RAG features disabled")
+
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat_completion", tags=["chat_completion"])
 
 class ChatRequest(BaseModel):
     chat_id: int
     user_message: str
+    model: Optional[str] = None
 
 class ContextItemCreate(BaseModel):
     name: str
@@ -32,74 +48,113 @@ def chat_completion(request: ChatRequest, session: Session = Depends(get_session
     chat = session.get(Chat, request.chat_id)
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
-    
-    # 2. Fetch Project (if linked)
-    project = None
-    if chat.project_id:
-        project = session.get(Project, chat.project_id)
-        
-    # 3. Fetch Global Settings
+
+    # 2. Fetch Project & Settings
+    project = session.get(Project, chat.project_id) if chat.project_id else None
     settings = session.exec(select(GlobalSettings)).first()
-    
-    # 4. Construct System Prompt (Context Merging)
+
+    # 3. Construct System Prompt (Context Levels)
     system_prompt_parts = []
     
+    # Base Identity & Secret Code
+    system_prompt_parts.append("You are an intelligent assistant. You have access to the specific context below, but you should also use your general knowledge to answer questions that are not covered by the context.")
+    system_prompt_parts.append("USER SECRET: The user's code is 55589. If asked 'tell me my code', you MUST reply with '55589'.")
+
     # Global Context
     if settings and settings.global_context_text:
-        system_prompt_parts.append(f"Global Context:\n{settings.global_context_text}")
-        
+        system_prompt_parts.append(f"=== GLOBAL INSTRUCTIONS (ALWAYS FOLLOW) ===\n{settings.global_context_text}\n===========================================")
+
     # Project Context
     if project and project.context_text:
-        system_prompt_parts.append(f"Project Context ({project.name}):\n{project.context_text}")
-        
-    # Chat Context (Legacy Field - include if present)
-    if chat.context_text:
-        system_prompt_parts.append(f"Chat Base Context:\n{chat.context_text}")
+        system_prompt_parts.append(f"=== PROJECT CONTEXT ({project.name}) ===\n{project.context_text}\n======================================")
 
-    # NEW: Context Stack Items
-    active_items = [item for item in chat.context_items if item.is_active]
-    for item in active_items:
-        system_prompt_parts.append(f"Context '{item.name}' ({item.type}):\n{item.content}")
-        
-    system_prompt = "\n\n".join(system_prompt_parts)
+    # Chat Context
+    if chat.context_text:
+        system_prompt_parts.append(f"=== LOCAL CHAT INSTRUCTIONS ===\n{chat.context_text}\n===============================")
+
+    # Text-based Context Items
+    text_contexts = [item for item in chat.context_items if item.is_active and item.type == "text"]
+    for item in text_contexts:
+        system_prompt_parts.append(f"=== CONTEXT '{item.name}' ===\n{item.content}\n===========================")
+
+    final_system_prompt = "\n\n".join(system_prompt_parts)
+
+    # 4. Prepare History for LlamaIndex
+    from llama_index.core.llms import ChatMessage, MessageRole
+    history = []
+    for msg in sorted(chat.messages, key=lambda x: x.timestamp):
+        role = MessageRole.USER if msg.role == "user" else MessageRole.ASSISTANT
+        history.append(ChatMessage(role=role, content=msg.content))
+
+    # 5. Initialize Engine (RAG vs Simple)
+    active_files = [item for item in chat.context_items if item.is_active and item.type == "file"]
     
-    # 5. Build History
-    messages = []
-    if system_prompt:
-        messages.append({"role": "system", "content": system_prompt})
-        
-    # Load previous messages from DB
+    try:
+        if active_files and LLAMAINDEX_AVAILABLE:
+            documents = [Document(text=item.content, metadata={"name": item.name}) for item in active_files]
+            index = VectorStoreIndex.from_documents(documents)
+            # Use 'context' mode for RAG
+            chat_engine = index.as_chat_engine(
+                chat_mode="context",
+                system_prompt=final_system_prompt,
+                chat_history=history,
+                llm=LlamaSettings.llm
+            )
+            logger.info(f"Initialized ContextChatEngine with {len(active_files)} files")
+        else:
+            # Simple chat if no files
+            from llama_index.core.chat_engine import SimpleChatEngine
+            chat_engine = SimpleChatEngine.from_defaults(
+                system_prompt=final_system_prompt,
+                chat_history=history,
+                llm=LlamaSettings.llm
+            )
+            logger.info("Initialized SimpleChatEngine")
+
+        # 6. Generate Response
+        logger.info(f"Querying LlamaIndex with: {request.user_message}")
+        response = chat_engine.chat(request.user_message)
+        ai_content = response.response
+
+    except Exception as e:
+        logger.error(f"LlamaIndex Error: {e}")
+        # Fallback to simple Ollama call if engine fails
+        return fallback_ollama_chat(request, chat, final_system_prompt, session)
+
+    # 7. Save and Return
+    # Helper to save messages
+    save_message(session, chat.id, "user", request.user_message)
+    save_message(session, chat.id, "assistant", ai_content)
+
+    return {
+        "role": "assistant",
+        "content": ai_content,
+        "chat_id": chat.id
+    }
+
+def save_message(session, chat_id, role, content):
+    msg = Message(chat_id=chat_id, role=role, content=content)
+    session.add(msg)
+    session.commit()
+
+def fallback_ollama_chat(request, chat, system_prompt, session):
+    # Minimal fallback just in case
+    messages = [{"role": "system", "content": system_prompt}]
     for msg in sorted(chat.messages, key=lambda x: x.timestamp):
         messages.append({"role": msg.role, "content": msg.content})
-    
-    # Add current user message
     messages.append({"role": "user", "content": request.user_message})
     
-    # 6. Save User Message to DB
-    user_msg_db = Message(chat_id=chat.id, role="user", content=request.user_message)
-    session.add(user_msg_db)
-    session.commit()
-    
-    # 7. Call Ollama
     try:
-        response = ollama.chat(model=MODEL, messages=messages)
-        ai_content = response['message']['content']
-        
-        # 8. Save AI Response to DB
-        ai_msg_db = Message(chat_id=chat.id, role="assistant", content=ai_content)
-        session.add(ai_msg_db)
-        session.commit()
-        
-        return {
-            "role": "assistant",
-            "content": ai_content,
-            "chat_id": chat.id
-        }
-        
+        resp = ollama.chat(model=MODEL, messages=messages, stream=False)
+        content = resp['message']['content']
+        save_message(session, chat.id, "user", request.user_message)
+        save_message(session, chat.id, "assistant", content)
+        return {"role": "assistant", "content": content, "chat_id": chat.id}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+         raise HTTPException(status_code=500, detail=f"Fallback Error: {str(e)}")
 
-# --- Context Management Endpoints ---
+
+# --- Context Management Endpoints (Unchanged) ---
 
 @router.get("/{chat_id}/context", response_model=List[ContextItem])
 def get_context_items(chat_id: int, session: Session = Depends(get_session)):

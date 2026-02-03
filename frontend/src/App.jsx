@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Workspace from './components/Workspace';
 import ContextPanel from './components/ContextPanel';
+import SettingsModal from './components/SettingsModal';
+import DownloadProgress from './components/DownloadProgress';
 import './App.css';
 
 const API_BASE = 'http://localhost:8000/api';
@@ -13,13 +15,48 @@ function App() {
   const [currentChat, setCurrentChat] = useState(null);
   const [globalContext, setGlobalContext] = useState("Loading...");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [availableModels, setAvailableModels] = useState([]);
+  const [selectedModel, setSelectedModel] = useState(localStorage.getItem('kage-selected-model') || 'llama3.2:1b');
+  const [downloads, setDownloads] = useState([]);
+
+  // Poll for download progress
+  useEffect(() => {
+    const pollInterval = setInterval(() => {
+      fetch(`${API_BASE}/settings/models/download/progress`)
+        .then(r => r.json())
+        .then(data => {
+          if (Array.isArray(data) && data.length > 0) {
+            setDownloads(data);
+          } else {
+            setDownloads([]);
+          }
+        })
+        .catch(e => console.error("Error polling downloads", e));
+    }, 1000); // Poll every second
+
+    return () => clearInterval(pollInterval);
+  }, []);
 
   // Fetch initial data
   useEffect(() => {
     fetchProjects();
     fetchChats();
     fetchSettings();
+    fetchModels();
   }, []);
+
+  const fetchModels = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/settings/models`);
+      if (res.ok) setAvailableModels(await res.json());
+    } catch (e) { console.error("Error fetching models", e); }
+  };
+
+  const handleModelChange = (modelName) => {
+    setSelectedModel(modelName);
+    localStorage.setItem('kage-selected-model', modelName);
+  };
 
   const fetchProjects = async () => {
     try {
@@ -57,7 +94,7 @@ function App() {
       const response = await fetch(`${API_BASE}/chat_completion/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: currentChat.id, user_message: text })
+        body: JSON.stringify({ chat_id: currentChat.id, user_message: text, model: selectedModel })
       });
 
       if (!response.ok) throw new Error("Server Error");
@@ -197,6 +234,56 @@ function App() {
     } catch (e) { console.error(e); alert("Failed to save context"); }
   };
 
+  const handleFileUpload = async (file) => {
+    if (!currentChat) {
+      alert("Please select or create a chat first.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      // 1. Upload to extract text
+      const uploadRes = await fetch(`${API_BASE}/chat_completion/upload`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!uploadRes.ok) throw new Error("Upload failed");
+
+      const { content, filename } = await uploadRes.json();
+
+      // 2. Add to context items
+      const contextRes = await fetch(`${API_BASE}/chat_completion/${currentChat.id}/context`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: filename,
+          content: content,
+          type: 'file'
+        })
+      });
+
+      if (contextRes.ok) {
+        const newItem = await contextRes.json();
+        const updatedChat = {
+          ...currentChat,
+          context_items: [...(currentChat.context_items || []), newItem]
+        };
+        setCurrentChat(updatedChat);
+
+        // Update in chats list too so it persists in UI navigation
+        setChats(chats.map(c => c.id === currentChat.id ? updatedChat : c));
+
+        alert(`File '${filename}' added to context successfully!`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Failed to process file. Ensure backend is running.");
+    }
+  };
+
   return (
     <div className={`app-container ${isSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <Sidebar
@@ -205,11 +292,13 @@ function App() {
         onSelectProject={setCurrentProject}
         onSelectChat={(chat) => {
           setCurrentChat(chat);
-          if (!chat.messages || chat.messages.length === 0) {
-            fetch(`${API_BASE}/chats/${chat.id}/messages`).then(r => r.json()).then(msgs => {
-              setCurrentChat(prev => ({ ...prev, messages: msgs }));
-            });
-          }
+          // Fetch messages AND context items when selecting chat
+          Promise.all([
+            fetch(`${API_BASE}/chats/${chat.id}/messages`).then(r => r.json()),
+            fetch(`${API_BASE}/chat_completion/${chat.id}/context`).then(r => r.json())
+          ]).then(([msgs, items]) => {
+            setCurrentChat(prev => ({ ...prev, messages: msgs, context_items: items }));
+          });
         }}
         onCreateChat={() => handleCreateChat(currentProject?.id)}
         onCreateProject={handleCreateProject}
@@ -217,18 +306,32 @@ function App() {
         onRenameChat={handleRenameChat}
         onDeleteProject={handleDeleteProject}
         onRenameProject={handleRenameProject}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         isCollapsed={isSidebarCollapsed}
         toggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       />
       <Workspace
         currentChat={currentChat}
         onSendMessage={handleSendMessage}
+        availableModels={availableModels}
+        selectedModel={selectedModel}
+        onModelChange={handleModelChange}
+        onRefreshModels={fetchModels}
+        onFileUpload={handleFileUpload}
       />
       <ContextPanel
         project={currentProject}
         chat={currentChat}
         globalContext={globalContext}
         onUpdateContext={handleUpdateContext}
+      />
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
+      <DownloadProgress
+        downloads={downloads}
+        onClose={() => setDownloads([])}
       />
     </div>
   );

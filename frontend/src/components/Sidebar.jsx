@@ -12,9 +12,11 @@ const Sidebar = ({
     onRenameChat,
     onDeleteProject,
     onRenameProject,
+    onOpenSettings,
     isCollapsed,
     toggleSidebar
 }) => {
+
     const [activeMenu, setActiveMenu] = useState(null);
     const menuRef = useRef(null);
 
@@ -125,7 +127,7 @@ const Sidebar = ({
             </div>
 
             <div className="sidebar-footer">
-                <button className="settings-btn">
+                <button className="settings-btn" onClick={onOpenSettings}>
                     <Settings size={18} />
                     <span>Settings</span>
                 </button>
